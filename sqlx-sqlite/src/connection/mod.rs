@@ -74,15 +74,15 @@ pub(crate) struct ConnectionState {
 }
 
 impl ConnectionState {
-    /// Drops the `progress_handler_callback` if it exists.
-    pub(crate) fn remove_progress_handler(&mut self) {
-        if let Some(mut handler) = self.progress_handler_callback.take() {
-            unsafe {
-                sqlite3_progress_handler(self.handle.as_ptr(), 0, None, 0 as *mut _);
-                let _ = { Box::from_raw(handler.0.as_mut()) };
-            }
-        }
-    }
+    // /// Drops the `progress_handler_callback` if it exists.
+    // pub(crate) fn remove_progress_handler(&mut self) {
+    //     if let Some(mut handler) = self.progress_handler_callback.take() {
+    //         unsafe {
+    //             sqlite3_progress_handler(self.handle.as_ptr(), 0, None, 0 as *mut _);
+    //             let _ = { Box::from_raw(handler.0.as_mut()) };
+    //         }
+    //     }
+    // }
 }
 
 pub(crate) struct Statements {
@@ -230,9 +230,9 @@ impl LockedSqliteHandle<'_> {
     /// versions are released.
     ///
     /// See [the driver root docs][crate] for details.
-    pub fn as_raw_handle(&mut self) -> NonNull<sqlite3> {
-        self.guard.handle.as_non_null_ptr()
-    }
+    // pub fn as_raw_handle(&mut self) -> NonNull<sqlite3> {
+    //     self.guard.handle.as_non_null_ptr()
+    // }
 
     /// Apply a collation to the open database.
     ///
@@ -245,51 +245,52 @@ impl LockedSqliteHandle<'_> {
         collation::create_collation(&mut self.guard.handle, name, compare)
     }
 
-    /// Sets a progress handler that is invoked periodically during long running calls. If the progress callback
-    /// returns `false`, then the operation is interrupted.
-    ///
-    /// `num_ops` is the approximate number of [virtual machine instructions](https://www.sqlite.org/opcode.html)
-    /// that are evaluated between successive invocations of the callback. If `num_ops` is less than one then the
-    /// progress handler is disabled.
-    ///
-    /// Only a single progress handler may be defined at one time per database connection; setting a new progress
-    /// handler cancels the old one.
-    ///
-    /// The progress handler callback must not do anything that will modify the database connection that invoked
-    /// the progress handler. Note that sqlite3_prepare_v2() and sqlite3_step() both modify their database connections
-    /// in this context.
-    pub fn set_progress_handler<F>(&mut self, num_ops: i32, callback: F)
-    where
-        F: FnMut() -> bool + Send + 'static,
-    {
-        unsafe {
-            let callback_boxed = Box::new(callback);
-            // SAFETY: `Box::into_raw()` always returns a non-null pointer.
-            let callback = NonNull::new_unchecked(Box::into_raw(callback_boxed));
-            let handler = callback.as_ptr() as *mut _;
-            self.guard.remove_progress_handler();
-            self.guard.progress_handler_callback = Some(Handler(callback));
+    // / Sets a progress handler that is invoked periodically during long running calls. If the progress callback
+    // / returns `false`, then the operation is interrupted.
+    // /
+    // / `num_ops` is the approximate number of [virtual machine instructions](https://www.sqlite.org/opcode.html)
+    // / that are evaluated between successive invocations of the callback. If `num_ops` is less than one then the
+    // / progress handler is disabled.
+    // /
+    // / Only a single progress handler may be defined at one time per database connection; setting a new progress
+    // / handler cancels the old one.
+    // /
+    // / The progress handler callback must not do anything that will modify the database connection that invoked
+    // / the progress handler. Note that sqlite3_prepare_v2() and sqlite3_step() both modify their database connections
+    // / in this context.
 
-            sqlite3_progress_handler(
-                self.as_raw_handle().as_mut(),
-                num_ops,
-                Some(progress_callback::<F>),
-                handler,
-            );
-        }
-    }
+    // pub fn set_progress_handler<F>(&mut self, num_ops: i32, callback: F)
+    // where
+    //     F: FnMut() -> bool + Send + 'static,
+    // {
+    //     unsafe {
+    //         let callback_boxed = Box::new(callback);
+    //         // SAFETY: `Box::into_raw()` always returns a non-null pointer.
+    //         let callback = NonNull::new_unchecked(Box::into_raw(callback_boxed));
+    //         let handler = callback.as_ptr() as *mut _;
+    //         self.guard.remove_progress_handler();
+    //         self.guard.progress_handler_callback = Some(Handler(callback));
 
-    /// Removes the progress handler on a database connection. The method does nothing if no handler was set.
-    pub fn remove_progress_handler(&mut self) {
-        self.guard.remove_progress_handler();
-    }
+    //         sqlite3_progress_handler(
+    //             self.as_raw_handle().as_mut(),
+    //             num_ops,
+    //             Some(progress_callback::<F>),
+    //             handler,
+    //         );
+    //     }
+    // }
+
+    // /// Removes the progress handler on a database connection. The method does nothing if no handler was set.
+    // pub fn remove_progress_handler(&mut self) {
+    //     self.guard.remove_progress_handler();
+    // }
 }
 
 impl Drop for ConnectionState {
     fn drop(&mut self) {
         // explicitly drop statements before the connection handle is dropped
         self.statements.clear();
-        self.remove_progress_handler();
+        // self.remove_progress_handler();
     }
 }
 

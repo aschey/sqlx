@@ -1,6 +1,6 @@
-use std::ffi::CString;
 use std::ptr;
 use std::ptr::NonNull;
+use std::{ffi::CString, sync::Arc};
 
 use crate::error::Error;
 use libsqlite3_sys::{
@@ -13,11 +13,11 @@ use crate::{statement::unlock_notify, SqliteError};
 /// Managed handle to the raw SQLite3 database handle.
 /// The database handle will be closed when this is dropped and no `ConnectionHandleRef`s exist.
 #[derive(Debug)]
-pub(crate) struct ConnectionHandle(NonNull<sqlite3>);
+pub(crate) struct ConnectionHandle(Arc<rusqlite::Connection>);
 
 /// A wrapper around `ConnectionHandle` which *does not* finalize the handle on-drop.
 #[derive(Clone, Debug)]
-pub(crate) struct ConnectionHandleRaw(NonNull<sqlite3>);
+pub(crate) struct ConnectionHandleRaw(Arc<rusqlite::Connection>);
 
 // A SQLite3 handle is safe to send between threads, provided not more than
 // one is accessing it at the same time. This is upheld as long as [SQLITE_CONFIG_MULTITHREAD] is
@@ -35,67 +35,79 @@ unsafe impl Send for ConnectionHandleRaw {}
 
 impl ConnectionHandle {
     #[inline]
-    pub(super) unsafe fn new(ptr: *mut sqlite3) -> Self {
-        Self(NonNull::new_unchecked(ptr))
+    pub(super) fn new(conn: rusqlite::Connection) -> Self {
+        Self(Arc::new(conn))
     }
 
-    #[inline]
-    pub(crate) fn as_ptr(&self) -> *mut sqlite3 {
-        self.0.as_ptr()
+    pub(super) fn inner(&self) -> &rusqlite::Connection {
+        &self.0
     }
 
-    pub(crate) fn as_non_null_ptr(&self) -> NonNull<sqlite3> {
-        self.0
+    pub(crate) unsafe fn handle(&self) -> *mut sqlite3 {
+        self.0.handle()
     }
+
+    // #[inline]
+    // pub(crate) fn as_ptr(&self) -> *mut sqlite3 {
+    //     self.0.as_ptr()
+    // }
+
+    // pub(crate) fn as_non_null_ptr(&self) -> NonNull<sqlite3> {
+    //     self.0
+    // }
 
     #[inline]
     pub(crate) fn to_raw(&self) -> ConnectionHandleRaw {
-        ConnectionHandleRaw(self.0)
+        ConnectionHandleRaw(self.0.clone())
     }
 
     pub(crate) fn last_insert_rowid(&mut self) -> i64 {
+        self.0.last_insert_rowid()
         // SAFETY: we have exclusive access to the database handle
-        unsafe { sqlite3_last_insert_rowid(self.as_ptr()) }
+        // unsafe { sqlite3_last_insert_rowid(self.as_ptr()) }
     }
 
-    pub(crate) fn exec(&mut self, query: impl Into<String>) -> Result<(), Error> {
-        let query = query.into();
-        let query = CString::new(query).map_err(|_| err_protocol!("query contains nul bytes"))?;
+    pub(crate) fn exec(&mut self, query: impl AsRef<str>) -> Result<(), Error> {
+        // let query = query.into();
+        // let query = CString::new(query).map_err(|_| err_protocol!("query contains nul bytes"))?;
 
-        // SAFETY: we have exclusive access to the database handle
-        unsafe {
-            loop {
-                let status = sqlite3_exec(
-                    self.as_ptr(),
-                    query.as_ptr(),
-                    // callback if we wanted result rows
-                    None,
-                    // callback data
-                    ptr::null_mut(),
-                    // out-pointer for the error message, we just use `SqliteError::new()`
-                    ptr::null_mut(),
-                );
+        self.0.execute(query.as_ref(), []).unwrap();
+        Ok(())
+        // // SAFETY: we have exclusive access to the database handle
+        // unsafe {
+        //     loop {
+        //         let status = sqlite3_exec(
+        //             self.as_ptr(),
+        //             query.as_ptr(),
+        //             // callback if we wanted result rows
+        //             None,
+        //             // callback data
+        //             ptr::null_mut(),
+        //             // out-pointer for the error message, we just use `SqliteError::new()`
+        //             ptr::null_mut(),
+        //         );
 
-                match status {
-                    SQLITE_OK => return Ok(()),
-                    SQLITE_LOCKED_SHAREDCACHE => unlock_notify::wait(self.as_ptr())?,
-                    _ => return Err(SqliteError::new(self.as_ptr()).into()),
-                }
-            }
-        }
+        //         match status {
+        //             SQLITE_OK => return Ok(()),
+        //             SQLITE_LOCKED_SHAREDCACHE => unlock_notify::wait(self.as_ptr())?,
+        //             _ => return Err(SqliteError::new(self.as_ptr()).into()),
+        //         }
+        //     }
+        // }
     }
 }
 
-impl Drop for ConnectionHandle {
-    fn drop(&mut self) {
-        unsafe {
-            // https://sqlite.org/c3ref/close.html
-            let status = sqlite3_close(self.0.as_ptr());
-            if status != SQLITE_OK {
-                // this should *only* happen due to an internal bug in SQLite where we left
-                // SQLite handles open
-                panic!("{}", SqliteError::new(self.0.as_ptr()));
-            }
-        }
-    }
-}
+// impl Drop for ConnectionHandle {
+//     fn drop(&mut self) {
+//         self.0.close().unwrap();
+//         // unsafe {
+//         //     // https://sqlite.org/c3ref/close.html
+//         //     let status = sqlite3_close(self.0.as_ptr());
+//         //     if status != SQLITE_OK {
+//         //         // this should *only* happen due to an internal bug in SQLite where we left
+//         //         // SQLite handles open
+//         //         panic!("{}", SqliteError::new(self.0.as_ptr()));
+//         //     }
+//         // }
+//     }
+// }

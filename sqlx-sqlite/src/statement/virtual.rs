@@ -88,7 +88,9 @@ impl VirtualStatement {
                 return Ok(None);
             }
 
-            if let Some(statement) = prepare(conn.as_ptr(), &mut self.tail, self.persistent)? {
+            if let Some(statement) =
+                unsafe { prepare(conn.handle(), &mut self.tail, self.persistent)? }
+            {
                 let num = statement.column_count();
 
                 let mut columns = Vec::with_capacity(num);

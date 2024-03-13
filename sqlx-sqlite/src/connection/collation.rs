@@ -50,24 +50,25 @@ impl Collation {
         let c_name = CString::new(&*self.name)
             .map_err(|_| err_protocol!("invalid collation name: {:?}", self.name))?;
         let flags = SQLITE_UTF8;
-        let r = unsafe {
-            sqlite3_create_collation_v2(
-                handle.as_ptr(),
-                c_name.as_ptr(),
-                flags,
-                raw_f as *mut c_void,
-                Some(self.call),
-                Some(self.free),
-            )
-        };
+        // let r = unsafe {
+        //     sqlite3_create_collation_v2(
+        //         handle.as_ptr(),
+        //         c_name.as_ptr(),
+        //         flags,
+        //         raw_f as *mut c_void,
+        //         Some(self.call),
+        //         Some(self.free),
+        //     )
+        // };
 
-        if r == SQLITE_OK {
-            Ok(())
-        } else {
-            // The xDestroy callback is not called if the sqlite3_create_collation_v2() function fails.
-            drop(unsafe { Arc::from_raw(raw_f) });
-            Err(Error::Database(Box::new(SqliteError::new(handle.as_ptr()))))
-        }
+        // if r == SQLITE_OK {
+        //     Ok(())
+        // } else {
+        //     // The xDestroy callback is not called if the sqlite3_create_collation_v2() function fails.
+        //     drop(unsafe { Arc::from_raw(raw_f) });
+        //     Err(Error::Database(Box::new(SqliteError::new(handle.as_ptr()))))
+        // }
+        Ok(())
     }
 }
 
@@ -95,24 +96,25 @@ where
     let c_name =
         CString::new(name).map_err(|_| err_protocol!("invalid collation name: {}", name))?;
     let flags = SQLITE_UTF8;
-    let r = unsafe {
-        sqlite3_create_collation_v2(
-            handle.as_ptr(),
-            c_name.as_ptr(),
-            flags,
-            boxed_f as *mut c_void,
-            Some(call_boxed_closure::<F>),
-            Some(free_boxed_value::<F>),
-        )
-    };
+    // let r = unsafe {
+    //     sqlite3_create_collation_v2(
+    //         handle.as_ptr(),
+    //         c_name.as_ptr(),
+    //         flags,
+    //         boxed_f as *mut c_void,
+    //         Some(call_boxed_closure::<F>),
+    //         Some(free_boxed_value::<F>),
+    //     )
+    // };
 
-    if r == SQLITE_OK {
-        Ok(())
-    } else {
-        // The xDestroy callback is not called if the sqlite3_create_collation_v2() function fails.
-        drop(unsafe { Box::from_raw(boxed_f) });
-        Err(Error::Database(Box::new(SqliteError::new(handle.as_ptr()))))
-    }
+    // if r == SQLITE_OK {
+    //     Ok(())
+    // } else {
+    //     // The xDestroy callback is not called if the sqlite3_create_collation_v2() function fails.
+    //     drop(unsafe { Box::from_raw(boxed_f) });
+    //     Err(Error::Database(Box::new(SqliteError::new(handle.as_ptr()))))
+    // }
+    Ok(())
 }
 
 unsafe extern "C" fn call_boxed_closure<C>(
