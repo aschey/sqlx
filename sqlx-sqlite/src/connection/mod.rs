@@ -21,7 +21,7 @@ use std::fmt::Write;
 
 pub(crate) use sqlx_core::connection::*;
 
-pub(crate) use handle::{ConnectionHandle, ConnectionHandleRaw};
+pub(crate) use handle::ConnectionHandle;
 
 pub(crate) mod collation;
 pub(crate) mod describe;

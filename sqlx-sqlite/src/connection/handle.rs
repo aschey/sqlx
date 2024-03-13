@@ -13,11 +13,11 @@ use crate::{statement::unlock_notify, SqliteError};
 /// Managed handle to the raw SQLite3 database handle.
 /// The database handle will be closed when this is dropped and no `ConnectionHandleRef`s exist.
 #[derive(Debug)]
-pub(crate) struct ConnectionHandle(Arc<rusqlite::Connection>);
+pub(crate) struct ConnectionHandle(rusqlite::Connection);
 
 /// A wrapper around `ConnectionHandle` which *does not* finalize the handle on-drop.
-#[derive(Clone, Debug)]
-pub(crate) struct ConnectionHandleRaw(Arc<rusqlite::Connection>);
+// #[derive(Clone, Debug)]
+// pub(crate) struct ConnectionHandleRaw(Arc<RwLock<rusqlite::Connection>>);
 
 // A SQLite3 handle is safe to send between threads, provided not more than
 // one is accessing it at the same time. This is upheld as long as [SQLITE_CONFIG_MULTITHREAD] is
@@ -28,15 +28,15 @@ pub(crate) struct ConnectionHandleRaw(Arc<rusqlite::Connection>);
 
 // <https://www.sqlite.org/c3ref/c_config_covering_index_scan.html#sqliteconfigmultithread>
 
-unsafe impl Send for ConnectionHandle {}
+// unsafe impl Send for ConnectionHandle {}
 
-// SAFETY: this type does nothing but provide access to the DB handle pointer.
-unsafe impl Send for ConnectionHandleRaw {}
+// // SAFETY: this type does nothing but provide access to the DB handle pointer.
+// unsafe impl Send for ConnectionHandleRaw {}
 
 impl ConnectionHandle {
     #[inline]
     pub(super) fn new(conn: rusqlite::Connection) -> Self {
-        Self(Arc::new(conn))
+        Self(conn)
     }
 
     pub(super) fn inner(&self) -> &rusqlite::Connection {
@@ -56,10 +56,10 @@ impl ConnectionHandle {
     //     self.0
     // }
 
-    #[inline]
-    pub(crate) fn to_raw(&self) -> ConnectionHandleRaw {
-        ConnectionHandleRaw(self.0.clone())
-    }
+    // #[inline]
+    // pub(crate) fn to_raw(&self) -> ConnectionHandleRaw {
+    //     ConnectionHandleRaw(self.0.clone())
+    // }
 
     pub(crate) fn last_insert_rowid(&mut self) -> i64 {
         self.0.last_insert_rowid()

@@ -17,8 +17,8 @@ use tracing::span::Span;
 
 use crate::connection::describe::describe;
 use crate::connection::establish::EstablishParams;
+use crate::connection::execute;
 use crate::connection::ConnectionState;
-use crate::connection::{execute, ConnectionHandleRaw};
 use crate::{Sqlite, SqliteArguments, SqliteQueryResult, SqliteRow, SqliteStatement};
 
 // Each SQLite connection has a dedicated thread.
@@ -30,7 +30,7 @@ use crate::{Sqlite, SqliteArguments, SqliteQueryResult, SqliteRow, SqliteStateme
 pub(crate) struct ConnectionWorker {
     command_tx: flume::Sender<(Command, tracing::Span)>,
     /// The `sqlite3` pointer. NOTE: access is unsynchronized!
-    pub(crate) _handle_raw: ConnectionHandleRaw,
+    // pub(crate) _handle_raw: ConnectionHandleRaw,
     /// Mutex for locking access to the database.
     pub(crate) shared: Arc<WorkerSharedState>,
 }
@@ -105,7 +105,7 @@ impl ConnectionWorker {
                 if establish_tx
                     .send(Ok(Self {
                         command_tx,
-                        _handle_raw: conn.handle.to_raw(),
+                        // _handle_raw: conn.handle.to_raw(),
                         shared: Arc::clone(&shared),
                     }))
                     .is_err()
