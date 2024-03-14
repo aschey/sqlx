@@ -43,6 +43,10 @@ impl ConnectionHandle {
         &self.0
     }
 
+    pub(super) fn into_inner(self) -> rusqlite::Connection {
+        self.0
+    }
+
     pub(crate) unsafe fn handle(&self) -> *mut sqlite3 {
         self.0.handle()
     }

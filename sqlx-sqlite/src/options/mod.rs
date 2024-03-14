@@ -12,7 +12,7 @@ pub use auto_vacuum::SqliteAutoVacuum;
 pub use journal_mode::SqliteJournalMode;
 pub use locking_mode::SqliteLockingMode;
 use std::cmp::Ordering;
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::{borrow::Cow, time::Duration};
 pub use synchronous::SqliteSynchronous;
 
@@ -81,6 +81,9 @@ pub struct SqliteConnectOptions {
     pub(crate) thread_name: Arc<DebugFn<dyn Fn(u64) -> String + Send + Sync + 'static>>,
 
     pub(crate) optimize_on_close: OptimizeOnClose,
+
+    pub(crate) modify_fns:
+        Vec<Arc<Mutex<DebugFn<dyn FnMut(&mut rusqlite::Connection) + Send + Sync>>>>,
 
     #[cfg(feature = "regexp")]
     pub(crate) register_regexp_function: bool,
@@ -200,6 +203,7 @@ impl SqliteConnectOptions {
             command_channel_size: 50,
             row_channel_size: 50,
             optimize_on_close: OptimizeOnClose::Disabled,
+            modify_fns: vec![],
             #[cfg(feature = "regexp")]
             register_regexp_function: false,
         }
@@ -214,6 +218,15 @@ impl SqliteConnectOptions {
     /// Gets the current name of the database file.
     pub fn get_filename(self) -> Cow<'static, Path> {
         self.filename
+    }
+
+    pub fn modify_connection<F: FnMut(&mut rusqlite::Connection) + Send + Sync + 'static>(
+        mut self,
+        modify_fn: F,
+    ) -> Self {
+        self.modify_fns
+            .push(Arc::new(Mutex::new(DebugFn(modify_fn))));
+        self
     }
 
     /// Set the enforcement of [foreign key constraints](https://www.sqlite.org/pragma.html#pragma_foreign_keys).

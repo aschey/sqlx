@@ -4,7 +4,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Arc;
 use std::thread;
 
-use futures_intrusive::sync::{Mutex, MutexGuard};
+use futures::lock::{Mutex, MutexGuard};
 
 use futures_channel::oneshot;
 use sqlx_core::describe::Describe;
@@ -35,6 +35,7 @@ pub(crate) struct ConnectionWorker {
     pub(crate) shared: Arc<WorkerSharedState>,
 }
 
+#[derive(Debug)]
 pub(crate) struct WorkerSharedState {
     pub(crate) cached_statements_size: AtomicUsize,
     pub(crate) conn: Mutex<ConnectionState>,
@@ -98,7 +99,7 @@ impl ConnectionWorker {
                     // note: must be fair because in `Command::UnlockDb` we unlock the mutex
                     // and then immediately try to relock it; an unfair mutex would immediately
                     // grant us the lock even if another task is waiting.
-                    conn: Mutex::new(conn, true),
+                    conn: Mutex::new(conn),
                 });
                 let mut conn = shared.conn.try_lock().unwrap();
 
@@ -375,6 +376,11 @@ impl ConnectionWorker {
         res.map_err(|_| Error::WorkerCrashed)?;
 
         Ok(guard)
+    }
+
+    pub(crate) async fn into_inner(mut self) -> ConnectionState {
+        self.shutdown().await.unwrap();
+        Arc::try_unwrap(self.shared).unwrap().conn.into_inner()
     }
 
     /// Send a command to the worker to shut down the processing thread.

@@ -1,5 +1,5 @@
+use futures::lock::MutexGuard;
 use futures_core::future::BoxFuture;
-use futures_intrusive::sync::MutexGuard;
 use futures_util::future;
 use libsqlite3_sys::{sqlite3, sqlite3_progress_handler};
 use sqlx_core::common::StatementCache;
@@ -111,6 +111,11 @@ impl SqliteConnection {
         let guard = self.worker.unlock_db().await?;
 
         Ok(LockedSqliteHandle { guard })
+    }
+
+    pub async fn into_inner(self) -> rusqlite::Connection {
+        let state = self.worker.into_inner().await;
+        state.handle.into_inner()
     }
 }
 
@@ -234,6 +239,10 @@ impl LockedSqliteHandle<'_> {
     //     self.guard.handle.as_non_null_ptr()
     // }
 
+    pub fn inner(&self) -> &rusqlite::Connection {
+        self.guard.handle.inner()
+    }
+
     /// Apply a collation to the open database.
     ///
     /// See [`SqliteConnectOptions::collation()`] for details.
@@ -286,13 +295,13 @@ impl LockedSqliteHandle<'_> {
     // }
 }
 
-impl Drop for ConnectionState {
-    fn drop(&mut self) {
-        // explicitly drop statements before the connection handle is dropped
-        self.statements.clear();
-        // self.remove_progress_handler();
-    }
-}
+// impl Drop for ConnectionState {
+//     fn drop(&mut self) {
+//         // explicitly drop statements before the connection handle is dropped
+//         self.statements.clear();
+//         // self.remove_progress_handler();
+//     }
+// }
 
 impl Statements {
     fn new(capacity: usize) -> Self {

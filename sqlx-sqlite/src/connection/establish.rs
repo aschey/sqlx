@@ -8,6 +8,7 @@ use libsqlite3_sys::{
     sqlite3_load_extension, sqlite3_open_v2,
 };
 use rusqlite::{Connection, OpenFlags};
+use sqlx_core::common::DebugFn;
 use sqlx_core::IndexMap;
 use std::borrow::Cow;
 use std::ffi::{c_void, CStr, CString};
@@ -16,6 +17,7 @@ use std::os::raw::c_int;
 use std::path::{Path, PathBuf};
 use std::ptr::{addr_of_mut, null, null_mut};
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 // This was originally `AtomicU64` but that's not supported on MIPS (or PowerPC):
@@ -46,6 +48,7 @@ pub struct EstablishParams {
     statement_cache_capacity: usize,
     log_settings: LogSettings,
     extensions: IndexMap<PathBuf, Option<String>>,
+    modify_fns: Vec<Arc<Mutex<DebugFn<dyn FnMut(&mut rusqlite::Connection) + Send + Sync>>>>,
     pub(crate) thread_name: String,
     pub(crate) command_channel_size: usize,
     #[cfg(feature = "regexp")]
@@ -165,6 +168,7 @@ impl EstablishParams {
             extensions,
             thread_name: (options.thread_name)(thread_id as u64),
             command_channel_size: options.command_channel_size,
+            modify_fns: options.modify_fns.clone(),
             #[cfg(feature = "regexp")]
             register_regexp_function: options.register_regexp_function,
         })
@@ -200,7 +204,9 @@ impl EstablishParams {
         //     sqlite3_open_v2(self.filename.as_ptr(), &mut handle, self.open_flags, null())
         // };
         let mut conn = Connection::open_with_flags(&self.filename, self.open_flags).unwrap();
-
+        for func in &self.modify_fns {
+            (func.lock().unwrap())(&mut conn);
+        }
         // if handle.is_null() {
         //     // Failed to allocate memory
         //     return Err(Error::Io(io::Error::new(
